@@ -1,7 +1,18 @@
 # Splashworks Data Warehouse — Backlog
 
 **Project:** Splashworks Enterprise Data Platform
-**Last Updated:** 2026-07-17
+**Last Updated:** 2026-08-10
+
+---
+
+## ⚠️ PROPOSED REGROOM — Pattern Study 2026-08-10 (pending Ross approval)
+
+The PDW/SDW pattern study (`docs/pattern-study/phase-e-recommendations.md`) proposes:
+**10 new items** (ETL-10/11 · DL-21→26 · DA-6 · RC-9, listed in their stream tables below, tagged `[PS-2026-08-10]`),
+**wave sequencing** (Wave 0: DL-23 snapshots → ETL-10 feed registry → DL-21 dbt tests → DA-6 freshness badge),
+**2 re-ranks** (ETL-6 ↑High; SA-M6 folded into ETL-10), and
+**3 deprecations** (EIA-5, EIA-6 — superseded by live pgvector Ripple; IN-1 — recommend kill, dw-bi mirror covers it).
+Items marked PROPOSED are not committed until this banner is removed in a reviewed PR.
 
 ---
 
@@ -44,8 +55,8 @@ One-off scrapes remain acceptable. This log exists so each scrape is **conscious
 | EIA-2 | Enterprise index manifest (`enterprise-index.yaml`) | Docs | S | Auto-discoverable catalog of all EIA docs for agents |
 | EIA-3 | Invoice + Payment glossary entities | Docs | M | Cross-system mapping (Skimmer → QBO → Warehouse) |
 | EIA-4 | Technician + Route glossary entities | Docs | S | Skimmer-only entities, warehouse mapping |
-| EIA-5 | Ripple POC scope + vector store design | Design | M | MS Copilot agent, Pinecone embeddings, first use cases |
-| EIA-6 | Vector index pipeline (chunk → embed → Pinecone) | Backend | M | Ingest docs/enterprise/ into searchable index |
+| EIA-5 | ~~Ripple POC scope + vector store design~~ | Design | M | **[PS-2026-08-10 PROPOSED-DEPRECATE]** Superseded by reality: Ripple Phase 1 LIVE on pgvector + OpenAI (ripple.splshwrks.com). |
+| EIA-6 | ~~Vector index pipeline (chunk → embed → Pinecone)~~ | Backend | M | **[PS-2026-08-10 PROPOSED-DEPRECATE]** pgvector pipeline in production; residual docs/enterprise/ embedding scope → RP-2.x. |
 
 ### ETL — Historical Accumulation
 
@@ -59,6 +70,8 @@ One-off scrapes remain acceptable. This log exists so each scrape is **conscious
 | ETL-6 | **Add `_loaded_at` + `_extract_date` to fact tables** — row-level provenance for incremental facts | ETL | S | Phase 2 of source traceability. Enables "when did this row enter the warehouse?" |
 | ETL-7 | **Row-level trace CLI** — given a Skimmer ID, trace it through raw → staging → warehouse → semantic | ETL | M | Phase 2 of source traceability. `./cli/trace-record.sh payment abc123 AQPS` |
 | ETL-8 | **`rpt_reconciliation` dbt model** — point-in-time snapshots of source vs warehouse totals with variance | dbt model | S | Phase 3 of source traceability. Auditable trail for compliance. |
+| ETL-10 | **[PS-2026-08-10 PROPOSED] Feed registry + schedule-aware freshness** — `etl.feed_registry` (source, company, max_age_hours, active_hours) + unregistered-feed detection + retire early-hours false-WARN. Fold in SA-M6 (MD5→SHA-256, same files). **Gates all new source onboarding.** | ETL | S | Pattern: PDW feed_registry + schedule-aware guard (direct lift). Closes the open freshness-guard question. |
+| ETL-11 | **[PS-2026-08-10 PROPOSED] Per-company failure isolation + read watchdog** — isolate each company's extract/load, per-company status rows, wall-clock budget on reads | ETL | M | Pattern: PDW per-brand matrix + `_fetch_hard` watchdog. |
 | ETL-9 | **Schema governance rollout** — full CTRL-01/02/04/05 implementation on top of hotfix seed | ETL + dbt | L | Builds on `docs/data-governance/` scaffold landed 2026-04-20. Scope: (1) YAML contract loader + validator in `etl/schema_contract.py`, (2) drift detector + `etl_schema_drift` population, (3) atomic pipeline gate in `nightly-pipeline.sh` (drift → abort before any load), (4) Slack `#alerts` alerting for drift events, (5) append-only triggers + `auditor_ro` role on evidence tables, (6) `union_companies()` macro rewrite to emit explicit column lists from contracts, (7) dbt tests generated from contracts, (8) migrate all 45 Skimmer tables from pre-governance → governed (one contract file per table, reviewed PR per migration). **Policy:** `docs/data-governance/policy.md` (*Lex Immutabilis*). **Drives:** future QBO + Zoho onboarding per `procedures/new-source-onboarding.md`. |
 
 ### Data Layer — Warehouse Models
@@ -76,6 +89,13 @@ One-off scrapes remain acceptable. This log exists so each scrape is **conscious
 | ~~DL-11~~ | ~~`fact_route_skip` — skipped service tracking with reasons, revenue leakage~~ | ~~dbt model~~ | ~~S~~ | ~~DONE 2026-03-18. 806 rows (day-of + pre-planned).~~ |
 | ~~DL-12~~ | ~~`fact_route_move` — schedule disruption tracking, tech reassignment patterns~~ | ~~dbt model~~ | ~~S~~ | ~~DONE 2026-03-18. 3,510 rows.~~ |
 | DL-13 | `fact_equipment_install` — equipment lifecycle, replacement cycles, parts spend | dbt model | M | Depends on ETL-4 + DL-6. |
+| DL-21 | **[PS-2026-08-10 PROPOSED] dbt schema tests, generated** — unique/not_null on every dim key + fact grain; accepted_values `_company_name` from COMPANY_MAP | dbt | S | Ends the zero-tests era. Down-payment on ETL-9 item 7. |
+| DL-22 | **[PS-2026-08-10 PROPOSED] Golden invariant suite** — CI (staging) + nightly (prod): grain uniqueness, active-filter identity, COMPANY_MAP coverage, no-cancel-before-create, semantic↔bi_compat parity. House rule: broken twice = invariant. | dbt + CI | M | Pattern: PDW golden suite + tie guards. |
+| DL-23 | **[PS-2026-08-10 PROPOSED] dbt snapshots (SCD2)** — dim_customer, dim_service_location (rate!), stg_route_assignment | dbt | S | ⚠️ History destroyed nightly until this lands — unbackfillable. Wave 0 first slot. |
+| DL-24 | **[PS-2026-08-10 PROPOSED] Identity ledger** — customer_alias (old→survivor, reason, decided_by) + member_exclusion (audited choke point); staging honors both | dbt + ETL | M | Pattern: PDW master_id_alias + member_exclusions. Soft-blocks BI Invoice convergence. |
+| DL-25 | **[PS-2026-08-10 PROPOSED] Governed seeds** — defined_terms (term, version, definition, rule_ref, approved_by) + tag_catalog (owner, active) + entity_registry (validity dates, typed columns) | dbt seeds | M | Charter sign-off = Ross approves seed PR. Pattern: PDW defined_terms/charter. |
+| DL-26 | **[PS-2026-08-10 PROPOSED] `dim_customer_cohort`** — from stg_customer_tag + entity_registry seed; resolves 495 ambiguous-multi-tag customers; unblocks revenue/churn by acquisition | dbt | S | Depends DL-25. |
+| RC-9 | **[PS-2026-08-10 PROPOSED] Partner-ledger reconciliation check #9** — PDW cohort ledger (archived governance backup) vs SDW tag counts | ETL | S | Surfaces the 1,272-row drift daily; data already local at 00:30. |
 | DL-20 | **Recurring Service Checklist report** — per-stop, per-item completion + reason | dbt model | M | **BLOCKED on data.** Not in the nightly extract; Skimmer API has no checklist endpoint (re-verified live 2026-07-17 — `Routes`/`ServiceStops`/`Checklists`/`ServiceHistory` all 404). Data exists only in Skimmer's UI Service History export. Unblock = Option C (scheduled CSV → OneDrive, needs Skimmer). Scaffold + correspondence preserved in `docs/plans/blocked-features/`. |
 | ~~DL-14~~ | ~~`rpt_active_routes` + `cli/export-active-routes.sh` — CEO-recurring active routes export. Vendor-canonical filter (Glenn/Skimmer 2026-04-22). Observational service-state labels.~~ | ~~dbt + CLI~~ | ~~S~~ | ~~DONE 2026-04-22. Fills Skimmer Route Dashboard export gap (native only supports screenshots).~~ |
 | ~~DL-15~~ | ~~**`fact_service_stop` duplicate-row bug** — NULL `service_stop_id` in the incremental unique_key never matched on merge, so unmatched route stops re-appended every night (JOMO 335,804 vs 99,739 real, 3.5x).~~ | ~~dbt model~~ | ~~M~~ | ~~**DONE 2026-07-15 (PR #29).** Fix: `coalesce(service_stop_id, route_stop_id)` (unique per date). One-time in-place dedup migration (~240k rows, NOT --full-refresh — preserves aged-out history). Reconcile check rewritten `version_inflation`→`fact_service_stop_duplicate_rows` (old one miscounted legit fan-out); now 0 dupes, 8/8 pass. rpt_service_history 377,708→140,871.~~ |
@@ -108,12 +128,13 @@ One-off scrapes remain acceptable. This log exists so each scrape is **conscious
 | DA-3 | Dashboard templates library | Frontend | M | Preset dashboards for common use cases |
 | DA-4 | PDF export with formatted report layout | Frontend | M | jsPDF + layout formatting |
 | DA-5 | Dashboard duplication | Frontend | S | Clone existing dashboard |
+| DA-6 | **[PS-2026-08-10 PROPOSED] Freshness badge** — `/api/freshness` endpoint + header badge + Metabase text card | Full stack | S | Pattern: PDW warehouse_asof. Bundle with IN-18 (same trust theme). |
 
 ### Infrastructure
 
 | ID | Item | Category | Effort | Notes |
 |----|------|----------|--------|-------|
-| IN-1 | Cloudflare WARP for Power BI remote access | Config | M | VA in Manila needs Power BI connectivity |
+| IN-1 | ~~Cloudflare WARP for Power BI remote access~~ | Config | M | **[PS-2026-08-10 PROPOSED-DEPRECATE — recommend kill]** Was already awaiting kill-or-keep vs dw-bi mirror (2026-07-06). Study adds: PDW serves equivalent users via CF Access'd dashboards, zero VPN — the dw-bi mirror is the same pattern. |
 | ~~IN-2~~ | ~~Read-only Postgres users for Metabase + Ripple~~ | ~~Config~~ | ~~S~~ | ~~DONE 2026-03-26. `ripple_rw` + `metabase_ro` created. Ripple switched to restricted user.~~ |
 | IN-3 | Deploy UI refinements to VPS (UI.11) | Deploy | S | Number formatting, date handling, starter prompts |
 | ~~IN-7~~ | ~~**Ripple CF Access auth middleware**~~ | ~~Security~~ | ~~S~~ | ~~DONE 2026-03-26. CloudflareAccessMiddleware added, JWT forwarded in Nginx.~~ |

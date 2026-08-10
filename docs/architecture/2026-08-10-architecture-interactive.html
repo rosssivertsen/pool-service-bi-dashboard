@@ -1,0 +1,262 @@
+<title>SDW ⇄ PDW Architecture — Current → Future</title>
+<style>
+:root{
+  --paper:#f7f8f7; --ink:#16211f; --muted:#5b6763; --line:#d9dedc;
+  --sdw:#0e7a8a; --sdw-soft:#e3f0f2; --pdw:#b0691f; --pdw-soft:#f6ecdf;
+  --good:#2e7d4f; --crit:#b3383d; --card:#ffffff;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#131a19; --ink:#e8ecea; --muted:#93a09b; --line:#2c3634;
+  --sdw:#4fb3c4; --sdw-soft:#12292d; --pdw:#d9964a; --pdw-soft:#2b2115;
+  --good:#5cb884; --crit:#e07a7f; --card:#1a2321;
+}}
+:root[data-theme="dark"]{
+  --paper:#131a19; --ink:#e8ecea; --muted:#93a09b; --line:#2c3634;
+  --sdw:#4fb3c4; --sdw-soft:#12292d; --pdw:#d9964a; --pdw-soft:#2b2115;
+  --good:#5cb884; --crit:#e07a7f; --card:#1a2321;
+}
+:root[data-theme="light"]{
+  --paper:#f7f8f7; --ink:#16211f; --muted:#5b6763; --line:#d9dedc;
+  --sdw:#0e7a8a; --sdw-soft:#e3f0f2; --pdw:#b0691f; --pdw-soft:#f6ecdf;
+  --good:#2e7d4f; --crit:#b3383d; --card:#ffffff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.55 "Seravek","Avenir Next",system-ui,sans-serif;}
+main{max-width:1080px;margin:0 auto;padding:0 20px 80px}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.eyebrow{font-family:ui-monospace,monospace;font-size:.72rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted)}
+header.hero{padding:44px 0 8px;border-bottom:1px solid var(--line);margin-bottom:8px}
+h1{font-size:1.9rem;line-height:1.15;margin:.3rem 0 .4rem;text-wrap:balance;font-weight:650}
+h1 .sdw{color:var(--sdw)} h1 .pdw{color:var(--pdw)}
+.hero p{max-width:62ch;color:var(--muted);margin:.2rem 0}
+.bar{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--line);
+  display:flex;gap:8px;align-items:center;padding:10px 0;flex-wrap:wrap}
+.bar .lbl{font-size:.78rem;color:var(--muted);margin-right:2px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);padding:6px 14px;cursor:pointer;
+  font:inherit;font-size:.82rem}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.seg button:focus-visible{outline:2px solid var(--sdw);outline-offset:-2px}
+section.sys{margin-top:36px}
+.sysHead{display:flex;align-items:baseline;gap:12px;border-left:4px solid;padding-left:14px;margin-bottom:6px}
+.sysHead h2{margin:0;font-size:1.35rem;font-weight:650}
+#secSDW .sysHead{border-color:var(--sdw)} #secPDW .sysHead{border-color:var(--pdw)}
+.state{margin-top:18px}
+.state[hidden]{display:none}
+.stateTag{display:inline-block;font-family:ui-monospace,monospace;font-size:.7rem;
+  letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:4px;margin-bottom:8px}
+.cur .stateTag{background:var(--line);color:var(--ink)}
+#secSDW .fut .stateTag{background:var(--sdw);color:var(--paper)}
+#secPDW .fut .stateTag{background:var(--pdw);color:var(--paper)}
+.diagram{background:var(--card);border:1px solid var(--line);border-radius:8px;
+  padding:14px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;min-width:640px}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.panel h3{margin:0 0 8px;font-size:.85rem;display:flex;align-items:center;gap:8px}
+.panel h3::before{content:"";width:9px;height:9px;border-radius:50%;display:inline-block}
+.panel.keep h3{color:var(--good)} .panel.keep h3::before{background:var(--good)}
+.panel.gap h3{color:var(--crit)}  .panel.gap h3::before{background:var(--crit)}
+.panel ul{margin:0;padding-left:18px}
+.panel li{margin:4px 0;font-size:.9rem}
+.wave{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 4px}
+.chip{font-family:ui-monospace,monospace;font-size:.78rem;border:1px solid var(--line);
+  border-radius:5px;padding:5px 10px;background:var(--card)}
+.chip b{font-weight:650}
+#secSDW .chip b{color:var(--sdw)} #secPDW .chip b{color:var(--pdw)}
+table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+th,td{padding:9px 13px;text-align:left;border-top:1px solid var(--line);vertical-align:top}
+thead th{border-top:0;font-family:ui-monospace,monospace;font-size:.72rem;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+td .dir{font-family:ui-monospace,monospace;font-size:.8rem;white-space:nowrap}
+.toSDW{color:var(--sdw)} .toPDW{color:var(--pdw)}
+.inv{border:1px solid var(--line);border-left:4px solid var(--crit);border-radius:8px;
+  background:var(--card);padding:14px 18px;margin-top:36px}
+.inv h2{margin:0 0 8px;font-size:1.05rem}
+.inv ul{margin:0;padding-left:18px} .inv li{margin:5px 0;font-size:.92rem}
+footer{margin-top:44px;color:var(--muted);font-size:.8rem}
+@media (prefers-reduced-motion: no-preference){
+  .state{transition:opacity .18s ease}
+}
+</style>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Pattern study · Phase F · 2026-08-10</div>
+  <h1><span class="sdw">Splashworks DW</span> ⇄ <span class="pdw">Pool Deck DW</span> — current to future state</h1>
+  <p>Two warehouses over the same businesses, strong where the other is weak. This page maps both
+     architectures today, the proposed future state of each, and the pattern exchange between them.
+     SDW changes are proposed (pending PR approval); PDW changes are advisory only.</p>
+</header>
+
+<nav class="bar" aria-label="View controls">
+  <span class="lbl">View</span>
+  <span class="seg" role="group" aria-label="State filter">
+    <button data-view="both" aria-pressed="true">Both states</button>
+    <button data-view="cur" aria-pressed="false">Current</button>
+    <button data-view="fut" aria-pressed="false">Future</button>
+  </span>
+</nav>
+
+<section class="sys" id="secSDW">
+  <div class="sysHead"><h2>Splashworks Data Warehouse</h2>
+    <span class="eyebrow">Postgres 16 · dbt · nightly extracts · Ross / CCE</span></div>
+
+  <div class="state cur" data-state="cur">
+    <span class="stateTag">Current</span>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+    SK[Skimmer SaaS] -->|nightly extracts| OD[(OneDrive)]
+    OD -->|05:30 UTC| ETL[Python ETL<br/>checksums + COMPANY_MAP]
+    ETL --> RAW[(raw: full replace<br/>6-month window)]
+    RAW --> DBT[dbt - 55 models]
+    DBT --> STG[staging 21] --> WH[warehouse 18<br/>11 incremental facts] --> SEM[semantic 14] --> BIC[bi_compat 2]
+    SEM --> API[FastAPI NL-to-SQL] --> APP[React SPA]
+    SEM --> MB[Metabase]
+    DBT -.-> REC[8 recon checks<br/>nightly, non-gating] --> TRI[triage -> Slack]
+    PDWCI[PDW CI backups] -->|SFTP| ARC[verified archive]
+    </pre></div>
+    <div class="panels">
+      <div class="panel keep"><h3>Spine — keep</h3><ul>
+        <li>dbt + PR + branch-per-stream discipline</li>
+        <li>Triage → Slack alerting with signature KB</li>
+        <li>Audit-schema isolation + PII retention</li>
+        <li>Registry-driven onboarding (COMPANY_MAP)</li>
+        <li>Partner SFTP custody chain (verify → archive)</li></ul></div>
+      <div class="panel gap"><h3>Gaps — fix</h3><ul>
+        <li><span class="mono">0</span> dbt tests; nothing gates a merge</li>
+        <li>No dimension history — 6-mo window erases silently</li>
+        <li>No identity above (id, company); no exclusions ledger</li>
+        <li>No feed registry — unmonitored feeds undetectable</li>
+        <li>Definitions unversioned; no UI freshness signal</li></ul></div>
+    </div>
+  </div>
+
+  <div class="state fut" data-state="fut">
+    <span class="stateTag">Future — Waves 0–2</span>
+    <div class="wave">
+      <span class="chip"><b>W0</b> DL-23 snapshots · ETL-10 feed registry · DL-21 dbt tests · DA-6 freshness badge</span>
+      <span class="chip"><b>W1</b> DL-22 golden suite · DL-24 identity ledger → DL-25 seeds → DL-26 cohort dim · RC-9</span>
+      <span class="chip"><b>W2</b> ETL-6 provenance · ETL-11 isolation/watchdog · then ETL-9 governance (L)</span>
+    </div>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+    OD[(OneDrive)] --> ETL[ETL + per-company isolation<br/>+ read watchdog W2]
+    ETL --> RAW[(raw)] --> DBT[dbt]
+    DBT --> SNAP[[SCD2 snapshots W0<br/>customer - rate - routes]]
+    DBT --> STG[staging] --> IDL[[identity ledger W1<br/>alias + exclusions]] --> WH[warehouse]
+    SEEDS[[governed seeds W1<br/>defined_terms - tag_catalog - entity_registry]] --> WH
+    WH --> COH[[dim_customer_cohort W1]]
+    WH --> SEM[semantic] --> API[FastAPI] --> APP[React + freshness badge W0]
+    FREG[[feed_registry W0<br/>tolerances + active hours]] -.-> REC[recon + RC-9]
+    GOLD[[golden suite W1]] -.gates.-> DBT
+    TESTS[[dbt tests W0]] -.gates.-> DBT
+    REC --> TRI[triage -> Slack]
+    </pre></div>
+  </div>
+</section>
+
+<section class="sys" id="secPDW">
+  <div class="sysHead"><h2>Pool Deck Warehouse</h2>
+    <span class="eyebrow">Supabase · hourly APIs · Sam / AQPN Holdco · advisory only</span></div>
+
+  <div class="state cur" data-state="cur">
+    <span class="stateTag">Current (observed, read-only)</span>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+    SKAPI[Skimmer API] -->|hourly| SYNC[Actions sync jobs<br/>per-brand matrix + watchdog]
+    QBO[QBO / Intuit] --> SYNC
+    OTHER[Samsara - Xima - Azuga] --> SYNC
+    PGC[pg_cron dispatch] -.-> SYNC
+    SYNC --> LAND[(landing + sync_run)]
+    LAND --> XW[crosswalk guard<br/>deterministic + human queue]
+    XW --> CM[Master-ID core<br/>defined_terms - 197 loose SQL]
+    CM --> SERV[5 apps + warehouse_asof]
+    CM -.-> GUARDS[feed_registry - freshness<br/>tie guards - golden CI]
+    CM --> WBQ[change_queue] -->|password re-proof| SKAPI
+    CM --> BK[backup: irreplaceable only] -->|SFTP| SDWA[SDW archive]
+    </pre></div>
+    <div class="panels">
+      <div class="panel keep"><h3>Keep</h3><ul>
+        <li>Whole assertion layer: golden CI, tie guards, feed registry</li>
+        <li>Identity machinery: crosswalk, mint/merge ledgers, exclusions</li>
+        <li>Versioned semantic charter (defined_terms, 31 terms)</li>
+        <li>Ingestion robustness: watchdog, isolation, outage classes</li></ul></div>
+      <div class="panel gap"><h3>Gaps (advisory)</h3><ul>
+        <li>197 hand-applied SQL files; no migrations; documented drift</li>
+        <li>Guards fire, nobody paged — 11 failed pushes sat silent</li>
+        <li>Mgmt-token as routine SQL path; creds in synced folder</li>
+        <li>Locked ledger, no read-back — 1,272-row drift vs Skimmer</li></ul></div>
+    </div>
+  </div>
+
+  <div class="state fut" data-state="fut">
+    <span class="stateTag">Future (advisory)</span>
+    <div class="wave">
+      <span class="chip"><b>Cheapest</b> webhook alerting — days</span>
+      <span class="chip"><b>Compounding</b> migrations flow, golden suite as gate</span>
+      <span class="chip"><b>Custody</b> vaulted creds + scoped role</span>
+      <span class="chip"><b>Proof</b> ledger read-back · timed restore drill</span>
+    </div>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+    SRC[Sources] --> SYNC[Sync jobs<br/>scoped role - vaulted creds]
+    SYNC --> MIG[[migrations flow<br/>golden suite as gate]]
+    MIG --> LAND[(landing)] --> XW[crosswalk] --> CM[Master-ID core<br/>decomposed per BLUEPRINT]
+    CM --> SERV[apps]
+    CM --> RB[[ledger read-back<br/>vs live tags]]
+    GUARDS[guards + golden] --> AL[[webhook alerting]]
+    CM --> BK[backup] --> DRILL[[timed restore drill<br/>from SDW archive]]
+    </pre></div>
+  </div>
+</section>
+
+<section class="sys" id="secEx">
+  <div class="sysHead" style="border-left:4px solid var(--muted)"><h2>The exchange</h2>
+    <span class="eyebrow">11 patterns, both directions</span></div>
+  <div class="tblwrap"><table>
+    <thead><tr><th>Pattern</th><th>Direction</th><th>Vehicle</th></tr></thead>
+    <tbody>
+      <tr><td>Golden invariants / tie guards</td><td class="dir toSDW">PDW → SDW</td><td class="mono">DL-22</td></tr>
+      <tr><td>feed_registry + schedule-aware freshness</td><td class="dir toSDW">PDW → SDW</td><td class="mono">ETL-10</td></tr>
+      <tr><td>defined_terms / charter / tag_catalog</td><td class="dir toSDW">PDW → SDW</td><td class="mono">DL-25</td></tr>
+      <tr><td>Identity ledger (alias + exclusions)</td><td class="dir toSDW">PDW → SDW</td><td class="mono">DL-24</td></tr>
+      <tr><td>warehouse_asof freshness stamp</td><td class="dir toSDW">PDW → SDW</td><td class="mono">DA-6</td></tr>
+      <tr><td>SCD / episode history discipline</td><td class="dir toSDW">PDW → SDW</td><td class="mono">DL-23</td></tr>
+      <tr><td>Per-brand isolation + watchdog</td><td class="dir toSDW">PDW → SDW</td><td class="mono">ETL-11</td></tr>
+      <tr><td>Triage → Slack alerting</td><td class="dir toPDW">SDW → PDW</td><td>Advisory #2 + code offer</td></tr>
+      <tr><td>dbt / PR / migrations discipline</td><td class="dir toPDW">SDW → PDW</td><td>Advisory #1 + walkthrough</td></tr>
+      <tr><td>Custody archiving + verification</td><td class="dir toPDW">SDW → PDW</td><td>Already running</td></tr>
+      <tr><td>Ledger read-back reconciliation</td><td class="dir">both</td><td class="mono">RC-9</td> </tr>
+    </tbody>
+  </table></div>
+</section>
+
+<div class="inv">
+  <h2>Invariants that do not change</h2>
+  <ul>
+    <li><b>PDW = Pool Deck</b> (Sam / AQPN, Supabase) · <b>SDW = Splashworks</b> (Ross / CCE, Postgres). Boundary: <span class="mono">SUPABASE_*</span> vs <span class="mono">DATABASE_URL</span>.</li>
+    <li>No PDW data is ingested into SDW models — backups are held as verified files; RC-9 reads them for reconciliation only.</li>
+    <li>AQPN org is <i>Lex Immutabilis</i>: local review only; every PDW change is Sam's to make.</li>
+    <li>SDW stays read-only toward Skimmer — no write-back adoption.</li>
+  </ul>
+</div>
+
+<footer>Sources: docs/pattern-study/phase-a…e · docs/architecture/2026-08-10-current-future-architecture.md · PDW clone @ 9447754 (read-only) · governance backups 2026-08-06→09</footer>
+</main>
+
+<script>
+(function(){
+  const btns = document.querySelectorAll('.bar [data-view]');
+  const states = document.querySelectorAll('.state');
+  function setView(v){
+    btns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view===v)));
+    states.forEach(s => { s.hidden = (v!=='both' && s.dataset.state!==v); });
+  }
+  btns.forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+  // All states visible at load so Mermaid renders at full size; filtering only after click.
+})();
+</script>
