@@ -10,10 +10,19 @@
 #     the jail and cannot traverse out, get a shell, or reach the DB socket.
 #   - Read-only `extracts/` subdir where the pipeline publishes files. Partner
 #     has read only (no write) — tighter than a normal upload jail.
+#     INBOUND-ONLY partners (they send us data, we publish nothing to them) set
+#     PUBLISH_DIR="" so the directory is never created. An empty `extracts/` in
+#     an inbound jail is a foot-gun: it reads as "a place to publish to" and
+#     invites a future script to do exactly that.
 #   - OPTIONAL write-enabled drop-off subdir (env DROPOFF_DIR, e.g. "incoming"),
 #     owned by the partner so they can PUT and DELETE their own files. Only that
 #     one subdir is writable; the jail root and `extracts/` stay root-owned, so
 #     the chroot requirement holds and published extracts remain tamper-proof.
+#     DROPOFF_MODE controls its permissions: 750 (default) or 700 for sensitive
+#     sources. All sftp accounts share the `sftponly` primary group, so 750
+#     grants group-read to every other partner's account. Chroot makes that
+#     unreachable over SFTP today, but a PII drop-off should not rely on a
+#     second control for its confidentiality — use 700.
 #   - Transfer logging: `internal-sftp -l INFO` records every open/close with
 #     filename and byte counts, so a PUT into the drop-off is provable. Without
 #     it sshd logs the login only and the audit trail stops at the door.
@@ -33,15 +42,28 @@
 #               account is created inert (key file empty) until the key arrives.
 #   DROPOFF_DIR env; name of a writable drop-off subdir (default: none/read-only).
 #               e.g. DROPOFF_DIR=incoming ./setup-sftp-user.sh sftp-greenmill-ci
+#   DROPOFF_MODE env; permissions on that subdir. Default 750; use 700 for
+#               sensitive (PII) sources.
+#   PUBLISH_DIR env; name of the read-only publish subdir. Default "extracts";
+#               set to "" for inbound-only partners so it is never created.
+#
+#   Inbound-only example (BBSI — they send, we publish nothing):
+#     PUBLISH_DIR= DROPOFF_DIR=incoming DROPOFF_MODE=700 \
+#       ./setup-sftp-user.sh sftp-bbsi /path/to/key.pub
 set -euo pipefail
 
 PARTNER_USER="${1:-sftp-greenmill}"
 PUBKEY_FILE="${2:-}"
 DROPOFF_DIR="${DROPOFF_DIR:-}"      # empty = pull-only account (the default)
+DROPOFF_MODE="${DROPOFF_MODE:-750}" # 700 for PII-bearing drop-offs
 GROUP="sftponly"
 SFTP_ROOT="/srv/sftp"
 JAIL="${SFTP_ROOT}/${PARTNER_USER}"
-DATA_DIR="${JAIL}/extracts"
+# PUBLISH_DIR is intentionally distinguishable from "set but empty": use
+# ${PUBLISH_DIR+x} so `PUBLISH_DIR=` means inbound-only, while an unset var
+# keeps the historical "extracts" default for existing pull partners.
+PUBLISH_SUB="${PUBLISH_DIR-extracts}"
+DATA_DIR="${PUBLISH_SUB:+${JAIL}/${PUBLISH_SUB}}"
 KEY_DIR="/etc/ssh/sftp-keys"
 KEY_FILE="${KEY_DIR}/${PARTNER_USER}"
 CFG="/etc/ssh/sshd_config"
@@ -64,9 +86,10 @@ fi
 passwd -l "$PARTNER_USER" >/dev/null 2>&1 || true   # lock password: key-only
 
 # 3. jail + parents must be root:root and non-writable (chroot requirement)
-mkdir -p "$SFTP_ROOT" "$JAIL" "$DATA_DIR"
-chown root:root "$SFTP_ROOT" "$JAIL" "$DATA_DIR"
-chmod 755 "$SFTP_ROOT" "$JAIL" "$DATA_DIR"
+mkdir -p "$SFTP_ROOT" "$JAIL" ${DATA_DIR:+"$DATA_DIR"}
+chown root:root "$SFTP_ROOT" "$JAIL" ${DATA_DIR:+"$DATA_DIR"}
+chmod 755 "$SFTP_ROOT" "$JAIL" ${DATA_DIR:+"$DATA_DIR"}
+[ -n "$DATA_DIR" ] || log "inbound-only: no publish dir created (PUBLISH_DIR empty)"
 
 # 3b. OPTIONAL writable drop-off subdir. Owned by the partner (not root) so they
 #     can PUT and DELETE their own files; 0750 keeps it off-limits outside the
@@ -77,8 +100,8 @@ if [ -n "$DROPOFF_DIR" ]; then
     DROP_PATH="${JAIL}/${DROPOFF_DIR}"
     mkdir -p "$DROP_PATH"
     chown "${PARTNER_USER}:${GROUP}" "$DROP_PATH"
-    chmod 750 "$DROP_PATH"
-    log "drop-off ${DROP_PATH} writable by ${PARTNER_USER} (client sees /${DROPOFF_DIR}/)"
+    chmod "$DROPOFF_MODE" "$DROP_PATH"
+    log "drop-off ${DROP_PATH} mode ${DROPOFF_MODE}, writable by ${PARTNER_USER} (client sees /${DROPOFF_DIR}/)"
 fi
 
 # 4. authorized_keys location outside the jail (partner cannot edit it)
@@ -138,4 +161,4 @@ log "sshd -t passed"
 systemctl reload ssh
 log "reloaded ssh"
 
-log "DONE. user=${PARTNER_USER} jail=${JAIL} data=${DATA_DIR} keys=${KEY_FILE}${DROPOFF_DIR:+ dropoff=${JAIL}/${DROPOFF_DIR}}"
+log "DONE. user=${PARTNER_USER} jail=${JAIL}${DATA_DIR:+ data=${DATA_DIR}} keys=${KEY_FILE}${DROPOFF_DIR:+ dropoff=${JAIL}/${DROPOFF_DIR} (${DROPOFF_MODE})}"

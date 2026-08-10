@@ -36,6 +36,15 @@ shopt -s nullglob
 
 DROPOFF_GLOB="${SFTP_DROPOFF_GLOB:-/srv/sftp/*/incoming}"
 ARCHIVE_ROOT="${PARTNER_ARCHIVE_DIR:-/opt/splashworks/data/partner-incoming}"
+
+# Accounts this script must NEVER copy into the shared partner archive.
+# `sftp-bbsi` carries payroll/HR PII (Ross, 2026-08-10): it needs a restricted
+# destination with its own retention clock, not the general-purpose archive that
+# other tooling reads. Excluding it EXPLICITLY matters — it would otherwise be
+# skipped only because BBSI sends no sidecar manifests, and the day they start
+# sending one it would silently begin archiving PII to the wrong place.
+ARCHIVE_EXCLUDE="${ARCHIVE_EXCLUDE:-sftp-bbsi}"
+
 ts() { date -u +%FT%TZ; }
 
 archived=0; skipped=0; failed=0
@@ -43,6 +52,14 @@ archived=0; skipped=0; failed=0
 for d in $DROPOFF_GLOB; do
     [ -d "$d" ] || continue
     account="$(basename "$(dirname "$d")")"
+
+    skip=0
+    for x in $ARCHIVE_EXCLUDE; do [ "$account" = "$x" ] && skip=1; done
+    if [ "$skip" -eq 1 ]; then
+        echo "$(ts) SKIP ${account}: excluded from the shared partner archive (restricted handling)"
+        continue
+    fi
+
     dest="${ARCHIVE_ROOT}/${account}"
     install -d -o root -g root -m 750 "$dest"
 
