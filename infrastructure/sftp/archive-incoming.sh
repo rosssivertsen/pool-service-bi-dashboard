@@ -106,8 +106,19 @@ except Exception:
 
         install -o root -g root -m 640 "$src" "${target}.part"
         mv -f "${target}.part" "$target"
-        install -o root -g root -m 640 "$manifest" "${target%.conflict.*}.manifest.json" 2>/dev/null \
-            || install -o root -g root -m 640 "$manifest" "${dest}/$(basename "$manifest")"
+        # Preserve the partner's OWN manifest filename so the archive is a faithful
+        # copy of the drop-off. The earlier form appended .manifest.json to the
+        # payload name, producing `<file>.json.gz.manifest.json` in the archive while
+        # the jail held `<file>.manifest.json` — the archive stopped matching the
+        # convention its own `file` field describes, so a restore tool written against
+        # the partner's layout would not find the sidecar. Data was never affected.
+        # On a CONFLICT the payload was renamed, so the manifest is paired to it
+        # explicitly — otherwise the second manifest would clobber the first.
+        if [ "$target" = "${dest}/${payload_name}" ]; then
+            install -o root -g root -m 640 "$manifest" "${dest}/$(basename "$manifest")"
+        else
+            install -o root -g root -m 640 "$manifest" "${target}.manifest.json"
+        fi
         echo "$(ts) archived ${account}/${payload_name} ($(stat -c %s "$target") bytes, sha256 ${got:0:16}…)"
         archived=$((archived + 1))
     done
